@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-import google.generativeai as genai
+from google import genai
 
 api_key = os.getenv("GEMINI_API_KEY")
 
@@ -10,9 +10,7 @@ if not api_key:
     print("GEMINI_API_KEY not configured. Skipping AI review.")
     raise SystemExit(0)
 
-genai.configure(api_key=api_key)
-
-model = genai.GenerativeModel("gemini-1.5-flash")
+client = genai.Client(api_key=api_key)
 
 repo_root = Path.cwd()
 
@@ -49,7 +47,10 @@ Repository:
 {content}
 """
 
-response = model.generate_content(prompt)
+response = client.models.generate_content(
+    model="gemini-2.5-flash",
+    contents=prompt,
+)
 
 report = response.text
 
