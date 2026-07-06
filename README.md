@@ -1,14 +1,24 @@
-# Python Lambda sample app
+# Python Lambda todo app
 
-This repository contains a minimal Python application for AWS Lambda that can be deployed from GitHub Actions.
+This repository contains a minimal Python AWS Lambda todo application that can be run locally and deployed with GitHub Actions.
 
 ## Files
 
-- `lambda_function.py` — Lambda handler entry point
-- `tests/test_lambda_function.py` — basic unit tests
+- `lambda_function.py` — Lambda handler entry point for a simple todo API
+- `tests/test_lambda_function.py` — unit tests for the todo API
 - `Dockerfile` — container image definition for Lambda
 - `.github/workflows/deploy.yml` — GitHub Actions workflow for zip-based deployment
 - `.github/workflows/deploy-docker.yml` — GitHub Actions workflow for Docker-based Lambda deployment
+
+## Todo API
+
+The Lambda handler supports the following routes when invoked as an API Gateway proxy:
+
+- `GET /todos` — list all todos
+- `POST /todos` — create a todo with JSON body `{ "title": "..." }`
+- `GET /todos/{id}` — retrieve a single todo
+- `PUT /todos/{id}` — update a todo
+- `DELETE /todos/{id}` — delete a todo
 
 ## Local testing
 
@@ -18,24 +28,13 @@ Run the tests locally:
 python -m unittest discover -s tests -v
 ```
 
-## GitHub Actions deployment
-
-Set these repository settings before enabling the workflow:
-
-- Repository variable: `AWS_REGION`
-- Repository variable: `LAMBDA_FUNCTION_NAME`
-- Repository variable: `ECR_REPOSITORY_NAME` (required for the Docker workflow)
-- Repository secret: `AWS_ROLE_TO_ASSUME`
-
-The Docker workflow uses GitHub OIDC to assume the AWS role, build the Lambda container image, push it to Amazon ECR, and deploy it to Lambda.
-
-If you want to add AI-related validation later, you can place those steps in the `Future AI integration readiness` section of the workflow.
-
 ## Lambda invocation example
 
 ```bash
 aws lambda invoke \
   --function-name YOUR_FUNCTION_NAME \
-  --payload '{"name":"GitHub Actions"}' \
+  --payload '{"httpMethod":"POST","path":"/todos","body":"{\"title\":\"Buy milk\"}"}' \
   response.json
 ```
+
+The function returns JSON responses and uses a simple in-memory todo store while the Lambda runtime is warm.
