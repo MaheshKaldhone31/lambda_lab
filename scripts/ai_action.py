@@ -1,58 +1,80 @@
 #!/usr/bin/env python3
+
 import os
-import sys
 from pathlib import Path
+from openai import OpenAI
+
+API_KEY = os.getenv("OPENAI_API_KEY")
+
+if not API_KEY:
+    print("OPENAI_API_KEY not configured. Skipping AI review.")
+    exit(0)
+
+client = OpenAI(api_key=API_KEY)
+
+repo_root = Path.cwd()
+
+files_to_scan = [
+    "README.md",
+    "Dockerfile",
+    "requirements.txt",
+    "lambda_function.py",
+    ".github/workflows/deploy-docker.yml",
+]
+
+content = ""
+
+for file_name in files_to_scan:
+    file_path = repo_root / file_name
+
+    if file_path.exists():
+        try:
+            content += f"\n\n===== {file_name} =====\n"
+            content += file_path.read_text(encoding="utf-8")[:5000]
+        except Exception as e:
+            print(f"Could not read {file_name}: {e}")
+
+prompt = f"""
+You are a senior DevSecOps engineer.
+
+Review this repository and provide:
+
+1. Security vulnerabilities
+2. CI/CD issues
+3. Docker best practices
+4. AWS Lambda best practices
+5. GitHub Actions improvements
+6. Code quality recommendations
+
+Repository content:
+
+{content}
+"""
 
 try:
-    import openai
-except Exception:
-    print("openai package not installed; exiting.")
-    sys.exit(2)
-
-
-def main() -> int:
-    key = os.environ.get("OPENAI_API_KEY")
-    if not key:
-        print("OPENAI_API_KEY not set — skipping AI integration.")
-        return 0
-
-    openai.api_key = key
-
-    repo_root = Path(__file__).resolve().parents[1]
-    readme_path = repo_root / "README.md"
-    index_path = repo_root / "index.html"
-
-    readme = readme_path.read_text(encoding="utf-8") if readme_path.exists() else ""
-    index = index_path.read_text(encoding="utf-8") if index_path.exists() else ""
-
-    prompt = (
-        "You are a helpful assistant that analyzes a small Python repository. "
-        "Summarize the project in 2-4 sentences and provide 3 concise improvement suggestions.\n\n"
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": "You are an expert DevSecOps reviewer."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        temperature=0.2
     )
-    prompt += "README:\n" + (readme[:4000] or "(no README)") + "\n\n"
-    prompt += "Index HTML:\n" + (index[:4000] or "(no index.html)")
 
-    try:
-        resp = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a repository analysis assistant."},
-                {"role": "user", "content": prompt},
-            ],
-            max_tokens=800,
-            temperature=0.2,
-        )
-        summary = resp["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        print("AI API call failed:", e, file=sys.stderr)
-        return 2
+    report = response.choices[0].message.content
 
-    out_path = repo_root / "ai_summary.txt"
-    out_path.write_text(summary, encoding="utf-8")
-    print("AI summary written to:", out_path)
-    print(summary)
-    return 0
+    with open("ai-security-report.md", "w") as f:
+        f.write(report)
 
+    print("\n===== AI SECURITY REPORT =====\n")
+    print(report)
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+except Exception as e:
+    print(f"AI review failed: {e}")
+    exit(1)
