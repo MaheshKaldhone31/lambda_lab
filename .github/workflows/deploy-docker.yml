@@ -117,24 +117,26 @@ jobs:
 
           python scripts/ai_action.py 
 
+      - name: Upload AI Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-security-review
+          path: ai_security_review.md
+
       - name: Publish AI Summary
         if: always()
         run: |
          echo "# 🤖 AI Security Review" >> $GITHUB_STEP_SUMMARY
          echo "" >> $GITHUB_STEP_SUMMARY
 
-         if [ -f ai_summary.txt ]; then
-          cat ai_summary.txt >> $GITHUB_STEP_SUMMARY
+         if [ -f ai_security_review.md ]; then
+          cat ai_security_review.md >> $GITHUB_STEP_SUMMARY
          else
           echo "AI report not generated." >> $GITHUB_STEP_SUMMARY
          fi
 
-      - name: Upload AI Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ai-security-report
-          path: ai_summary.txt
+
 
   deploy:
     name: Deploy Lambda
