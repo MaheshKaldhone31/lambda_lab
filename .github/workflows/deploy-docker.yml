@@ -117,17 +117,24 @@ jobs:
 
           python scripts/ai_action.py 
 
-      - name: Publish AI Report
+      - name: Publish AI Summary
+        if: always()
         run: |
-          echo "# 🤖 AI Security Review" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+         echo "# 🤖 AI Security Review" >> $GITHUB_STEP_SUMMARY
+         echo "" >> $GITHUB_STEP_SUMMARY
+
+         if [ -f ai_summary.txt ]; then
           cat ai_summary.txt >> $GITHUB_STEP_SUMMARY
+         else
+          echo "AI report not generated." >> $GITHUB_STEP_SUMMARY
+         fi
 
       - name: Upload AI Report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-         name: ai-security-report
-         path: ai_summary.txt
+          name: ai-security-report
+          path: ai_summary.txt
 
       - name: Check AI Score
         run: | 
