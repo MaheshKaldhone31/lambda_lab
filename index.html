@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo App</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            width: 100%;
+            max-width: 500px;
+            padding: 30px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .api-status {
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 20px;
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        button {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #5568d3;
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .todos-list {
+            list-style: none;
+        }
+        
+        .todo-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: #f9f9f9;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            transition: background 0.3s;
+        }
+        
+        .todo-item:hover {
+            background: #f0f0f0;
+        }
+        
+        .todo-item input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        
+        .todo-text {
+            flex: 1;
+            word-break: break-word;
+        }
+        
+        .todo-item input[type="checkbox"]:checked ~ .todo-text {
+            text-decoration: line-through;
+            color: #999;
+        }
+        
+        .todo-delete {
+            padding: 6px 12px;
+            background: #ff6b6b;
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+        
+        .todo-delete:hover {
+            background: #ee5a52;
+        }
+        
+        .empty-state {
+            text-align: center;
+            color: #999;
+            padding: 40px 20px;
+        }
+        
+        .error {
+            color: #ff6b6b;
+            font-size: 14px;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #ffe0e0;
+            border-radius: 5px;
+            display: none;
+        }
+        
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📝 Todo App</h1>
+        <div class="api-status">Lambda URL: <code id="api-url"></code></div>
+        
+        <div class="error" id="error-msg"></div>
+        
+        <div class="input-group">
+            <input 
+                type="text" 
+                id="todo-input" 
+                placeholder="Add a new todo..." 
+                autocomplete="off"
+            >
+            <button onclick="addTodo()">Add</button>
+        </div>
+        
+        <ul class="todos-list" id="todos-list">
+            <li class="empty-state">Loading todos...</li>
+        </ul>
+    </div>
+
+    <script>
+        // Replace with your Lambda Function URL
+        const LAMBDA_URL = 'https://wcyskwepj4jpwedlkcsrzyflky0qgfwi.lambda-url.us-east-1.on.aws/';
+        
+        document.getElementById('api-url').textContent = LAMBDA_URL;
+        
+        async function invoke(httpMethod, path, body = null) {
+            const payload = {
+                httpMethod,
+                path,
+                body: body ? JSON.stringify(body) : null
+            };
+            
+            try {
+                const response = await fetch(LAMBDA_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                const result = JSON.parse(data.body);
+                
+                if (data.statusCode >= 400) {
+                    throw new Error(result.error || 'API Error');
+                }
+                
+                return result;
+            } catch (err) {
+                showError(err.message);
+                throw err;
+            }
+        }
+        
+        function showError(msg) {
+            const errorEl = document.getElementById('error-msg');
+            errorEl.textContent = msg;
+            errorEl.style.display = 'block';
+            setTimeout(() => {
+                errorEl.style.display = 'none';
+            }, 3000);
+        }
+        
+        async function loadTodos() {
+            try {
+                const result = await invoke('GET', '/todos');
+                renderTodos(result.todos || []);
+            } catch (err) {
+                document.getElementById('todos-list').innerHTML = 
+                    '<li class="empty-state">Failed to load todos</li>';
+            }
+        }
+        
+        function renderTodos(todos) {
+            const list = document.getElementById('todos-list');
+            if (todos.length === 0) {
+                list.innerHTML = '<li class="empty-state">No todos yet. Add one above!</li>';
+                return;
+            }
+            
+            list.innerHTML = todos.map(todo => `
+                <li class="todo-item">
+                    <input 
+                        type="checkbox" 
+                        ${todo.completed ? 'checked' : ''} 
+                        onchange="toggleTodo('${todo.id}', this.checked)"
+                    >
+                    <span class="todo-text">${escapeHtml(todo.title)}</span>
+                    <button class="todo-delete" onclick="deleteTodo('${todo.id}')">Delete</button>
+                </li>
+            `).join('');
+        }
+        
+        async function addTodo() {
+            const input = document.getElementById('todo-input');
+            const title = input.value.trim();
+            
+            if (!title) return;
+            
+            input.disabled = true;
+            try {
+                await invoke('POST', '/todos', { title });
+                input.value = '';
+                await loadTodos();
+            } finally {
+                input.disabled = false;
+                input.focus();
+            }
+        }
+        
+        async function toggleTodo(id, completed) {
+            try {
+                await invoke('PUT', `/todos/${id}`, { completed });
+                await loadTodos();
+            } catch (err) {
+                await loadTodos(); // Reload on error
+            }
+        }
+        
+        async function deleteTodo(id) {
+            if (!confirm('Delete this todo?')) return;
+            
+            try {
+                await invoke('DELETE', `/todos/${id}`);
+                await loadTodos();
+            } catch (err) {
+                // Error already shown by invoke()
+            }
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Load todos on page load
+        loadTodos();
+        
+        // Allow Enter key to add todo
+        document.getElementById('todo-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addTodo();
+        });
+    </script>
+</body>
+</html>

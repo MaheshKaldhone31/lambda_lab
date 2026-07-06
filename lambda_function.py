@@ -1,7 +1,26 @@
 import json
 import uuid
+import os
 
 TODO_STORE = {}
+
+
+def get_html_ui():
+    """Load and return the HTML UI from index.html."""
+    html_path = os.path.join(os.path.dirname(__file__), "index.html")
+    if os.path.exists(html_path):
+        with open(html_path, "r") as f:
+            return f.read()
+    return """
+    <html>
+    <head><title>Todo App</title></head>
+    <body>
+        <h1>Todo App</h1>
+        <p>HTML UI file not found. API is still available.</p>
+        <p>Use API with {"httpMethod":"GET","path":"/todos"}</p>
+    </body>
+    </html>
+    """
 
 
 def build_response(status_code, body):
@@ -60,14 +79,30 @@ def delete_todo(todo_id):
 
 
 def handler(event, context):
-    http_method = event.get("httpMethod", "GET").upper()
-    path = event.get("path", "/todos")
-    raw_body = event.get("body")
+    # Handle Lambda Function URL format (convert to API Gateway format)
+    if "rawPath" in event and "requestContext" in event:
+        # Function URL format
+        http_method = event.get("requestContext", {}).get("http", {}).get("method", "GET").upper()
+        path = event.get("rawPath", "/todos")
+        raw_body = event.get("body")
+    else:
+        # API Gateway format
+        http_method = event.get("httpMethod", "GET").upper()
+        path = event.get("path", "/todos")
+        raw_body = event.get("body")
 
     try:
         body = json.loads(raw_body) if raw_body else {}
     except (TypeError, json.JSONDecodeError):
         return build_response(400, {"error": "Request body must be valid JSON."})
+
+    # Serve HTML UI for root path
+    if path in ["/", ""]:
+        return {
+            "statusCode": 200,
+            "headers": {"Content-Type": "text/html; charset=utf-8"},
+            "body": get_html_ui(),
+        }
 
     if path == "/todos":
         if http_method == "GET":
