@@ -136,14 +136,6 @@ jobs:
           name: ai-security-report
           path: ai_summary.txt
 
-      - name: Check AI Score
-        run: | 
-           SCORE=$(grep "Security Score" ai_summary.txt | grep -o '[0-9]\+')
-#           if [ "$SCORE" -lt 7 ]; then
-#           echo "AI score too low"
-#           exit 1
-#           fi
-
   deploy:
     name: Deploy Lambda
     needs:
