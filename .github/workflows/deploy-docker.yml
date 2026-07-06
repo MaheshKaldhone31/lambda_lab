@@ -4,14 +4,12 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
   id-token: write
   contents: read
+  security-events: write
 
 env:
   AWS_REGION: ${{ vars.AWS_REGION }}
@@ -20,57 +18,138 @@ env:
 
 jobs:
   test:
+    name: Unit Tests
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      - name: Run unit tests
-        run: python -m unittest discover -s tests -v
+      - name: Install dependencies
+        run: |
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
 
-  deploy:
-    needs: test
+      - name: Run tests
+        run: |
+          python -m unittest discover -s tests -v
+
+  codeql:
+    name: CodeQL Security Scan
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3
+
+  build_scan:
+    name: Build & Trivy Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker Image
+        run: |
+          docker build -t lambda-local:${{ github.sha }} .
+
+      - name: Run Trivy Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: lambda-local:${{ github.sha }}
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: 1
+
+  deploy:
+    name: Deploy Lambda
+    needs:
+      - test
+      - codeql
+      - build_scan
+
+    if: github.ref == 'refs/heads/main'
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate Variables
+        run: |
+          echo "AWS_REGION=${{ vars.AWS_REGION }}"
+          echo "ECR_REPOSITORY=${{ vars.ECR_REPOSITORY }}"
+          echo "LAMBDA_FUNCTION_NAME=${{ vars.LAMBDA_FUNCTION_NAME }}"
+
+          test -n "${{ vars.AWS_REGION }}"
+          test -n "${{ vars.ECR_REPOSITORY }}"
+          test -n "${{ vars.LAMBDA_FUNCTION_NAME }}"
+          test -n "${{ vars.AWS_ROLE_TO_ASSUME }}"
+
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Verify AWS Identity
+        run: aws sts get-caller-identity
 
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and push container image
+      - name: Build Docker Image
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" .
-          docker push "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker build \
+            -t $REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            -t $REGISTRY/$ECR_REPOSITORY:latest \
+            .
 
-      - name: Deploy image to Lambda
+      - name: Push Docker Image
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker push $REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $REGISTRY/$ECR_REPOSITORY:latest
+
+      - name: Update Lambda Function
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           aws lambda update-function-code \
-            --function-name "$LAMBDA_FUNCTION_NAME" \
-            --image-uri "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
-            --publish
+            --function-name $LAMBDA_FUNCTION_NAME \
+            --image-uri $REGISTRY/$ECR_REPOSITORY:latest
 
-      - name: Future AI integration readiness
+      - name: Wait For Lambda Update
         run: |
-          echo "This workflow is ready for AI-specific validation steps as you add them."
-          python -m unittest discover -s tests -v
+          aws lambda wait function-updated \
+            --function-name $LAMBDA_FUNCTION_NAME
+
+      - name: Verify Deployment
+        run: |
+          aws lambda get-function \
+            --function-name $LAMBDA_FUNCTION_NAME
