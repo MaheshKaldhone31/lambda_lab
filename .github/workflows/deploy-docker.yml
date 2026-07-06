@@ -111,6 +111,7 @@ jobs:
         run: |
           if [ -z "$GEMINI_API_KEY" ]; then
             echo "GEMINI_API_KEY not configured. Skipping AI security review."
+            echo "No AI security review performed." > ai_summary.txt
             exit 0
           fi
 

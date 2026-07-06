@@ -1,60 +1,117 @@
 #!/usr/bin/env python3
 
 import os
+import sys
+import time
 from pathlib import Path
+
 from google import genai
 
-api_key = os.getenv("GEMINI_API_KEY")
 
-if not api_key:
-    print("GEMINI_API_KEY not configured. Skipping AI review.")
-    raise SystemExit(0)
+def read_file(path):
+    try:
+        return Path(path).read_text(encoding="utf-8")[:10000]
+    except Exception:
+        return ""
 
-client = genai.Client(api_key=api_key)
 
-repo_root = Path.cwd()
+def get_repository_content():
+    files_to_scan = [
+        "README.md",
+        "lambda_function.py",
+        "Dockerfile",
+        "requirements.txt",
+        ".github/workflows/deploy-docker.yml",
+    ]
 
-files_to_scan = [
-    "README.md",
-    "Dockerfile",
-    "requirements.txt",
-    "lambda_function.py",
-]
+    content = ""
 
-content = ""
+    for file in files_to_scan:
+        if Path(file).exists():
+            content += f"\n\n===== {file} =====\n"
+            content += read_file(file)
 
-for file_name in files_to_scan:
-    file_path = repo_root / file_name
+    return content
 
-    if file_path.exists():
-        content += f"\n\n===== {file_name} =====\n"
-        content += file_path.read_text(encoding="utf-8")[:5000]
 
-prompt = f"""
-You are a Senior DevSecOps Engineer.
+def generate_ai_review(prompt):
+    client = genai.Client(
+        api_key=os.environ["GEMINI_API_KEY"]
+    )
 
-Review this repository and provide:
+    retries = 3
 
-1. Security issues
-2. Docker best practices
-3. Lambda best practices
-4. CI/CD improvements
-5. Cost optimization suggestions
-6. Overall score out of 10
+    for attempt in range(retries):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt
+            )
+
+            return response.text
+
+        except Exception as e:
+            print(f"Attempt {attempt + 1} failed: {e}")
+
+            if attempt < retries - 1:
+                time.sleep(10)
+            else:
+                raise
+
+
+def main():
+    api_key = os.getenv("GEMINI_API_KEY")
+
+    if not api_key:
+        print("GEMINI_API_KEY not configured.")
+        sys.exit(0)
+
+    repo_content = get_repository_content()
+
+    prompt = f"""
+You are a senior DevSecOps engineer.
+
+Analyze this repository.
+
+Provide:
+
+1. Security findings
+2. Vulnerabilities
+3. Docker best practices
+4. Lambda best practices
+5. GitHub Actions improvements
+6. Infrastructure recommendations
+
+Output in markdown format.
 
 Repository:
 
-{content}
+{repo_content}
 """
 
-response = client.models.generate_content(
-    model="gemini-2.5-flash",
-    contents=prompt,
-)
+    try:
+        result = generate_ai_review(prompt)
 
-report = response.text
+        report_file = "ai_security_review.md"
 
-with open("ai_summary.txt", "w") as f:
-    f.write(report)
+        with open(report_file, "w") as f:
+            f.write(result)
 
-print(report)
+        print("\n=== AI SECURITY REVIEW ===\n")
+        print(result)
+
+        print(f"\nReport written to {report_file}")
+
+    except Exception as e:
+        print(f"AI review failed: {e}")
+
+        with open("ai_security_review.md", "w") as f:
+            f.write(
+                f"# AI Review Failed\n\nError:\n\n{str(e)}"
+            )
+
+        sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()
