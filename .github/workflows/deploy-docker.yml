@@ -106,15 +106,15 @@ jobs:
 
       - name: Run AI Security Review
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          if [ -z "$OPENAI_API_KEY" ]; then
-            echo "OPENAI_API_KEY not configured. Skipping AI security review."
+          if [ -z "$GEMINI_API_KEY" ]; then
+            echo "GEMINI_API_KEY not configured. Skipping AI security review."
             exit 0
           fi
 
           python scripts/ai_action.py 
-          
+
   deploy:
     name: Deploy Lambda
     needs:
