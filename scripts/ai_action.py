@@ -2,15 +2,17 @@
 
 import os
 from pathlib import Path
-from openai import OpenAI
+import google.generativeai as genai
 
-API_KEY = os.getenv("OPENAI_API_KEY")
+api_key = os.getenv("GEMINI_API_KEY")
 
-if not API_KEY:
-    print("OPENAI_API_KEY not configured. Skipping AI review.")
-    exit(0)
+if not api_key:
+    print("GEMINI_API_KEY not configured. Skipping AI review.")
+    raise SystemExit(0)
 
-client = OpenAI(api_key=API_KEY)
+genai.configure(api_key=api_key)
+
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 repo_root = Path.cwd()
 
@@ -19,7 +21,6 @@ files_to_scan = [
     "Dockerfile",
     "requirements.txt",
     "lambda_function.py",
-    ".github/workflows/deploy-docker.yml",
 ]
 
 content = ""
@@ -28,53 +29,31 @@ for file_name in files_to_scan:
     file_path = repo_root / file_name
 
     if file_path.exists():
-        try:
-            content += f"\n\n===== {file_name} =====\n"
-            content += file_path.read_text(encoding="utf-8")[:5000]
-        except Exception as e:
-            print(f"Could not read {file_name}: {e}")
+        content += f"\n\n===== {file_name} =====\n"
+        content += file_path.read_text(encoding="utf-8")[:5000]
 
 prompt = f"""
-You are a senior DevSecOps engineer.
+You are a Senior DevSecOps Engineer.
 
 Review this repository and provide:
 
-1. Security vulnerabilities
-2. CI/CD issues
-3. Docker best practices
-4. AWS Lambda best practices
-5. GitHub Actions improvements
-6. Code quality recommendations
+1. Security issues
+2. Docker best practices
+3. Lambda best practices
+4. CI/CD improvements
+5. Cost optimization suggestions
+6. Overall score out of 10
 
-Repository content:
+Repository:
 
 {content}
 """
 
-try:
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {
-                "role": "system",
-                "content": "You are an expert DevSecOps reviewer."
-            },
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ],
-        temperature=0.2
-    )
+response = model.generate_content(prompt)
 
-    report = response.choices[0].message.content
+report = response.text
 
-    with open("ai-security-report.md", "w") as f:
-        f.write(report)
+with open("ai_summary.txt", "w") as f:
+    f.write(report)
 
-    print("\n===== AI SECURITY REPORT =====\n")
-    print(report)
-
-except Exception as e:
-    print(f"AI review failed: {e}")
-    exit(1)
+print(report)
