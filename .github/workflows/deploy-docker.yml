@@ -3,7 +3,10 @@ name: Deploy Docker Lambda
 on:
   push:
     branches:
-      - test
+      - main
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
