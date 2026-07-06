@@ -97,11 +97,11 @@ jobs:
       - name: Validate Variables
         run: |
           echo "AWS_REGION=${{ vars.AWS_REGION }}"
-          echo "ECR_REPOSITORY=${{ vars.ECR_REPOSITORY }}"
+          echo "ECR_REPOSITORY=${{ vars.ECR_REPOSITORY_NAME }}"
           echo "LAMBDA_FUNCTION_NAME=${{ vars.LAMBDA_FUNCTION_NAME }}"
 
           test -n "${{ vars.AWS_REGION }}"
-          test -n "${{ vars.ECR_REPOSITORY }}"
+          test -n "${{ vars.ECR_REPOSITORY_NAME }}"
           test -n "${{ vars.LAMBDA_FUNCTION_NAME }}"
           test -n "${{ vars.AWS_ROLE_TO_ASSUME }}"
 
