@@ -28,6 +28,17 @@ Run the tests locally:
 python -m unittest discover -s tests -v
 ```
 
+## GitHub Actions: AI integration
+
+An optional GitHub Actions workflow (`.github/workflows/ai-integration.yml`) can run an AI analysis step that summarizes the repository and writes `ai_summary.txt`.
+
+To enable it:
+
+- Add a repository secret named `OPENAI_API_KEY` with your OpenAI API key.
+- The workflow runs on pushes to `main` and on pull requests; the AI step only runs when the secret is present.
+
+The workflow calls `scripts/ai_action.py` which uses the `openai` Python package. Install the dependency via `pip install -r requirements.txt`.
+
 ## Lambda invocation example
 
 ```bash
