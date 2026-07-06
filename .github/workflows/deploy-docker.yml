@@ -3,7 +3,6 @@ name: Deploy Docker Lambda
 on:
   push:
     branches:
-      - main
       - test
   workflow_dispatch:
 
