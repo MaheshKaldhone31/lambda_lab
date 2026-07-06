@@ -176,33 +176,30 @@
     </div>
 
     <script>
-        // Replace with your Lambda Function URL
-        const LAMBDA_URL = 'https://wcyskwepj4jpwedlkcsrzyflky0qgfwi.lambda-url.us-east-1.on.aws/';
+        // API base URL - use relative path since we're on the same Function URL
+        const API_BASE = window.location.origin;
         
-        document.getElementById('api-url').textContent = LAMBDA_URL;
+        document.getElementById('api-url').textContent = API_BASE;
         
         async function invoke(httpMethod, path, body = null) {
-            const payload = {
-                httpMethod,
-                path,
-                body: body ? JSON.stringify(body) : null
-            };
-            
             try {
-                const response = await fetch(LAMBDA_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
+                const options = {
+                    method: httpMethod,
+                    headers: { 'Content-Type': 'application/json' }
+                };
                 
-                const data = await response.json();
-                const result = JSON.parse(data.body);
-                
-                if (data.statusCode >= 400) {
-                    throw new Error(result.error || 'API Error');
+                if (body) {
+                    options.body = JSON.stringify(body);
                 }
                 
-                return result;
+                const response = await fetch(API_BASE + path, options);
+                const data = await response.json();
+                
+                if (response.status >= 400) {
+                    throw new Error(data.error || `API Error: ${response.status}`);
+                }
+                
+                return data;
             } catch (err) {
                 showError(err.message);
                 throw err;
