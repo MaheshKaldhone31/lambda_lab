@@ -26,7 +26,12 @@ def get_html_ui():
 def build_response(status_code, body):
     return {
         "statusCode": status_code,
-        "headers": {"Content-Type": "application/json"},
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+        },
         "body": json.dumps(body),
     }
 
@@ -78,6 +83,20 @@ def delete_todo(todo_id):
     return build_response(204, {})
 
 
+def build_html_response(html_content):
+    """Return HTML response with proper headers for Function URL."""
+    return {
+        "statusCode": 200,
+        "headers": {
+            "Content-Type": "text/html; charset=utf-8",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+        },
+        "body": html_content,
+    }
+
+
 def handler(event, context):
     # Handle Lambda Function URL format (convert to API Gateway format)
     if "rawPath" in event and "requestContext" in event:
@@ -91,18 +110,28 @@ def handler(event, context):
         path = event.get("path", "/todos")
         raw_body = event.get("body")
 
+    # Handle OPTIONS for CORS preflight
+    if http_method == "OPTIONS":
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type",
+            },
+            "body": "",
+        }
+
     try:
         body = json.loads(raw_body) if raw_body else {}
     except (TypeError, json.JSONDecodeError):
-        return build_response(400, {"error": "Request body must be valid JSON."})
+        response = build_response(400, {"error": "Request body must be valid JSON."})
+        response["headers"]["Access-Control-Allow-Origin"] = "*"
+        return response
 
     # Serve HTML UI for root path
     if path in ["/", ""]:
-        return {
-            "statusCode": 200,
-            "headers": {"Content-Type": "text/html; charset=utf-8"},
-            "body": get_html_ui(),
-        }
+        return build_html_response(get_html_ui())
 
     if path == "/todos":
         if http_method == "GET":
