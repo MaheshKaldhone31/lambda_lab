@@ -113,8 +113,8 @@ jobs:
             exit 0
           fi
 
-          python scripts/ai_security_review.py
-
+          python scripts/ai_action.py 
+          
   deploy:
     name: Deploy Lambda
     needs:
